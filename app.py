@@ -9,37 +9,29 @@ from model import EnsembleModel
 from grad_cam import generate_gradcam, generate_gradcam_plus_plus, overlay_heatmap
 
 # -------------------------
-# ✅ Download model if not exists
-# -------------------------
-MODEL_PATH = "ensemble_model.pth"
-if not os.path.exists(MODEL_PATH):
-    with st.spinner("Downloading model..."):
-        gdown.download(
-            "https://drive.google.com/uc?id=1sfr9LnGfDmKeKhM8aOQEk8IpDbKEy0Kz",
-            MODEL_PATH,
-            quiet=False,
-        )
-        st.success("Model downloaded successfully!")
-
-# -------------------------
 # ✅ Set device
 # -------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # -------------------------
-# ✅ Load model with caching
+# ✅ Load model with caching and safe download
 # -------------------------
 @st.cache_resource
 def load_model():
+    MODEL_PATH = "ensemble_model.pth"
+    if not os.path.exists(MODEL_PATH):
+        with st.spinner("Downloading model..."):
+            gdown.download(
+                "https://drive.google.com/uc?id=1sfr9LnGfDmKeKhM8aOQEk8IpDbKEy0Kz",
+                MODEL_PATH,
+                quiet=False,
+            )
+            st.success("Model downloaded successfully!")
+
     model = EnsembleModel().to(device)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     model.eval()
     return model
-
-model = load_model()
-
-# Select target layer (EfficientNet last conv layer)
-target_layer = model.efficientnet._conv_head
 
 # -------------------------
 # ✅ Class labels
@@ -67,8 +59,15 @@ st.title("🔬 Skin Lesion Classification with Grad-CAM Visualizations")
 st.markdown("Upload a dermoscopic image to classify and visualize important regions using Grad-CAM or Grad-CAM++")
 
 uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
-
 cam_type = st.radio("Select CAM Type", ["Grad-CAM", "Grad-CAM++"])
+
+# Load model safely
+try:
+    model = load_model()
+    target_layer = model.efficientnet._conv_head
+except Exception as e:
+    st.error(f"❌ Failed to load model: {e}")
+    st.stop()
 
 if uploaded_file is not None:
     # Process image
